@@ -15,38 +15,38 @@ namespace Pulse_Runner
         private Texture2D _bgTexture, _groundTexture;
         private List<Platform> _platforms;
 
-        // Матрица трансформации для камеры
         private Matrix _cameraTransform;
+
+        private const float ReferenceHeight = 1080f;
+        private const float BasePlayerScale = 0.25f;
 
         public Game1()
         {
             _graphics = new GraphicsDeviceManager(this);
             Content.RootDirectory = "Content";
             IsMouseVisible = true;
-            Window.AllowUserResizing = true;
+
+            int screenWidth = GraphicsAdapter.DefaultAdapter.CurrentDisplayMode.Width;
+            int screenHeight = GraphicsAdapter.DefaultAdapter.CurrentDisplayMode.Height;
+            
+            int targetHeight = screenHeight;
+            int targetWidth = (int)(targetHeight * 0.75f); 
+        
+            _graphics.PreferredBackBufferWidth = targetWidth;
+            _graphics.PreferredBackBufferHeight = targetHeight;
+            
+            Window.IsBorderless = true;
+            Window.AllowUserResizing = false;
+            
+            _graphics.ApplyChanges();
         }
 
         protected override void Initialize()
         {
-            _graphics.PreferredBackBufferWidth = 600;
-            _graphics.PreferredBackBufferHeight = 900;
-            _graphics.IsFullScreen = false;
-            _graphics.ApplyChanges();
-
-            Window.ClientSizeChanged += OnWindowSizeChanged;
             base.Initialize();
-        }
 
-        private void OnWindowSizeChanged(object sender, EventArgs e)
-        {
-            if (GraphicsDevice != null)
-            {
-                _graphics.PreferredBackBufferWidth = Window.ClientBounds.Width;
-                _graphics.PreferredBackBufferHeight = Window.ClientBounds.Height;
-                _graphics.ApplyChanges();
-
-                UpdateLevelGeometry();
-            }
+            int screenWidth = GraphicsAdapter.DefaultAdapter.CurrentDisplayMode.Width;
+            Window.Position = new Point((screenWidth - _graphics.PreferredBackBufferWidth) / 2, 0);
         }
 
         protected override void LoadContent()
@@ -61,51 +61,112 @@ namespace Pulse_Runner
             Texture2D jumpFrame = Content.Load<Texture2D>("jump");
             Texture2D fallFrame = Content.Load<Texture2D>("fall");
 
-            _player = new Player(idleFrame, runFrames, attackFrames, jumpFrame, fallFrame, null, new Vector2(100, 100), 400f, 0.2f);
+            _player = new Player(idleFrame, runFrames, attackFrames, jumpFrame, fallFrame, null, new Vector2(100, 100), 400f, BasePlayerScale);
 
             _platforms = new List<Platform>();
             UpdateLevelGeometry();
         }
 
-        private void UpdateLevelGeometry()
+       private void UpdateLevelGeometry()
         {
             if (_groundTexture == null || _player == null) return;
 
-            int w = GraphicsDevice.Viewport.Width;
-            int h = GraphicsDevice.Viewport.Height;
-            float groundY = h - 100f;
+            int w = _graphics.PreferredBackBufferWidth;
+            int h = _graphics.PreferredBackBufferHeight;
+            float groundY = h - 66.2f;
 
-            _player.Scale = 0.22f * ((float)h / 900f);
+            _player.Scale = BasePlayerScale * ((float)h / ReferenceHeight);
 
             _platforms.Clear();
 
-            // Безопасный пол в самом низу
+            int platformWidth = 200; 
+            int ph = 10; 
+
+            int minGapY = _player.HitboxHeight + 20; 
+            int maxGapY = 240;                       
+            int maxHorizontalReach = 350;            
+
             _platforms.Add(new Platform(new Rectangle(0, (int)groundY, w, 100), _groundTexture));
 
-            int platformWidth = Math.Max(120, w / 4);
-            int ph = 40; 
-            int gap = 250; 
-            
-            // Генерируем высокий уровень из 30 платформ зигзагом
+            Random rng = new Random();
+            List<int> previousTierX = new List<int>() { w / 2 }; 
+            int currentY = (int)groundY;
+
             for (int i = 1; i <= 30; i++)
             {
-                int px;
-                int step = i % 4; // Простая логика зигзага для расстановки
-                
-                if (step == 1) px = w / 2 - platformWidth / 2;       // Центр
-                else if (step == 2) px = w / 6;                      // Лево
-                else if (step == 3) px = w / 2 - platformWidth / 2;  // Центр
-                else px = w - w / 6 - platformWidth;                 // Право
+                currentY -= rng.Next(minGapY, maxGapY);
 
-                _platforms.Add(new Platform(new Rectangle(px, (int)groundY - gap * i, platformWidth, ph), _groundTexture));
+                int platformsCount = (rng.Next(1, 101) <= 60) ? 1 : 2; 
+
+                List<int> currentTierX = new List<int>();
+
+                for (int p = 0; p < platformsCount; p++)
+                {
+                    int px = 0;
+                    bool validPosition = false;
+                    int attempts = 0;
+
+                    while (!validPosition && attempts < 20)
+                    {
+                        attempts++;
+                        px = rng.Next(10, w - platformWidth - 10); 
+
+                        bool isReachable = false;
+                        bool isBlocking = false; 
+
+                        foreach (int prevX in previousTierX)
+                        {
+                            int dist = Math.Abs(px - prevX);
+
+                            int centerPrev = prevX + platformWidth / 2;
+                            int centerCurrent = px + platformWidth / 2;
+                            if (Math.Abs(centerCurrent - centerPrev) <= maxHorizontalReach)
+                            {
+                                isReachable = true;
+                            }
+
+                            if (dist < platformWidth + 20)
+                            {
+                                isBlocking = true;
+                            }
+                        }
+
+                        bool isOverlapping = false;
+                        foreach (int currX in currentTierX)
+                        {
+                            if (Math.Abs(currX - px) < platformWidth + _player.HitboxWidth) 
+                            {
+                                isOverlapping = true;
+                                break;
+                            }
+                        }
+
+                        if (isReachable && !isBlocking && !isOverlapping) 
+                        {
+                            validPosition = true;
+                        }
+                    }
+
+                    if (!validPosition && previousTierX.Count > 0)
+                    {
+                        px = previousTierX[0] + platformWidth + 20;
+                        if (px > w - platformWidth - 10) 
+                        {
+                            px = previousTierX[0] - platformWidth - 20;
+                        }
+                        px = Math.Clamp(px, 10, w - platformWidth - 10);
+                    }
+
+                    currentTierX.Add(px);
+                    _platforms.Add(new Platform(new Rectangle(px, currentY, platformWidth, ph), _groundTexture));
+                }
+
+                previousTierX = currentTierX;
             }
 
-            if (_player.Position.Y + _player.HitboxHeight > groundY || _player.Position.X > w)
-            {
-                _player.Position = new Vector2(w / 2 - _player.HitboxWidth / 2, groundY - _player.HitboxHeight - 5);
-                _player.VelocityY = 0f;
-                _player.IsOnGround = true;
-            }
+            _player.Position = new Vector2(w / 2 - _player.HitboxWidth / 2, groundY - _player.HitboxHeight);
+            _player.VelocityY = 0f;
+            _player.IsOnGround = true;
         }
 
         protected override void Update(GameTime gameTime)
@@ -113,26 +174,14 @@ namespace Pulse_Runner
             var kstate = Keyboard.GetState();
             if (kstate.IsKeyDown(Keys.Escape)) Exit();
 
-            int currentWidth = GraphicsDevice.Viewport.Width;
-            int currentHeight = GraphicsDevice.Viewport.Height;
-
-            if (kstate.IsKeyDown(Keys.R))
-            {
-                _player.Position = new Vector2(currentWidth / 2 - _player.HitboxWidth / 2, currentHeight - 100f - _player.HitboxHeight - 10);
-                _player.VelocityY = 0f;
-            }
+            int currentWidth = _graphics.PreferredBackBufferWidth;
+            int currentHeight = _graphics.PreferredBackBufferHeight;
 
             _player.Update(gameTime, _platforms, currentWidth, currentHeight);
 
-            // === ЛОГИКА КАМЕРЫ ===
-            // Вычисляем, насколько нужно сдвинуть мир. Хотим, чтобы игрок был на уровне 60% высоты экрана.
             float targetY = _player.Position.Y - (currentHeight * 0.6f);
-            
-            // Не даем камере опускаться ниже земли (координата Y смещения не должна быть больше 0)
             if (targetY > 0) targetY = 0;
 
-            // Создаем матрицу сдвига. Так как Y в MonoGame растет вниз, 
-            // мы сдвигаем весь мир в отрицательную сторону (вверх), когда игрок поднимается (targetY отрицательный)
             _cameraTransform = Matrix.CreateTranslation(new Vector3(0, -targetY, 0));
 
             base.Update(gameTime);
@@ -140,18 +189,29 @@ namespace Pulse_Runner
 
         protected override void Draw(GameTime gameTime)
         {
-            GraphicsDevice.Clear(Color.CornflowerBlue);
+            GraphicsDevice.Clear(Color.Black);
             
-            // 1. Отрисовка фона БЕЗ матрицы камеры (фон статичен)
             _spriteBatch.Begin();
-            _spriteBatch.Draw(_bgTexture, new Rectangle(0, 0, GraphicsDevice.Viewport.Width, GraphicsDevice.Viewport.Height), Color.White);
+            
+            float bgScaleX = (float)_graphics.PreferredBackBufferWidth / _bgTexture.Width;
+            float bgScaleY = (float)_graphics.PreferredBackBufferHeight / _bgTexture.Height;
+            float bgScale = Math.Max(bgScaleX, bgScaleY); 
+            
+            float bgWidth = _bgTexture.Width * bgScale;
+            float bgHeight = _bgTexture.Height * bgScale;
+            float bgPosX = (_graphics.PreferredBackBufferWidth - bgWidth) / 2f;
+            float bgPosY = (_graphics.PreferredBackBufferHeight - bgHeight) / 2f;
+            
+            _spriteBatch.Draw(_bgTexture, new Vector2(bgPosX, bgPosY), null, Color.White, 0f, Vector2.Zero, bgScale, SpriteEffects.None, 0f);
+            
             _spriteBatch.End();
 
-            // 2. Отрисовка мира С МАТРИЦЕЙ камеры (платформы и игрок двигаются)
-            _spriteBatch.Begin(transformMatrix: _cameraTransform);
+            _spriteBatch.Begin(
+                samplerState: SamplerState.LinearWrap, 
+                transformMatrix: _cameraTransform
+            );
             
-            foreach (var p in _platforms) 
-                p.Draw(_spriteBatch);
+            foreach (var p in _platforms) p.Draw(_spriteBatch);
                 
             _player.Draw(_spriteBatch);
             

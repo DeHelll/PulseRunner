@@ -19,7 +19,6 @@ namespace Pulse_Runner
         public float Speed { get; set; }
         public float Scale { get; set; }
         
-        // Физический размер самого персонажа
         public int HitboxWidth => (int)(_idleFrame.Width * Scale * 0.45f); 
         public int HitboxHeight => (int)(_idleFrame.Height * Scale * 0.95f); 
         
@@ -78,7 +77,6 @@ namespace Pulse_Runner
             
             foreach (var p in platforms)
             {
-                // Возвращаем проверку по p.Bounds (точный размер платформы)
                 if (px.Intersects(p.Bounds))
                 {
                     if (dx > 0) Position.X = p.Bounds.Left - HitboxWidth;
@@ -133,18 +131,18 @@ namespace Pulse_Runner
             {
                 if (py.Intersects(p.Bounds))
                 {
-                    if (VelocityY > 0) 
+                    if (VelocityY > 0)
                     {
                         Position.Y = p.Bounds.Top - HitboxHeight; 
                         VelocityY = 0f;
                         IsOnGround = true;
                     }
-                    else if (VelocityY < 0) 
+                    else if (VelocityY < 0)
                     {
                         Position.Y = p.Bounds.Bottom;
                         VelocityY = 0f;
                     }
-                    
+
                     py = new Rectangle((int)Math.Round(Position.X) + 4, (int)Math.Round(Position.Y), HitboxWidth - 8, HitboxHeight);
                 }
             }
@@ -196,14 +194,12 @@ namespace Pulse_Runner
 
             float visualWidth = _currentTexture.Width * dynScale;
             float visualHeight = _currentTexture.Height * dynScale;
-            
+
             float wOff = (HitboxWidth - visualWidth) / 2f;
             float hOff = HitboxHeight - visualHeight; 
-            
-            // ВАЖНО: Если персонаж висит в воздухе над платформой, увеличь feetOffset (например до 15f или 20f). 
-            // Если он проваливается ногами в траву, сделай его отрицательным (например -5f).
-            float feetOffset = 10f; 
-            
+
+            float feetOffset = 11f; 
+
             Vector2 drawPos = new Vector2((float)Math.Round(Position.X + wOff), (float)Math.Round(Position.Y + hOff + feetOffset));
             spriteBatch.Draw(_currentTexture, drawPos, null, Color.White, 0f, Vector2.Zero, dynScale, _spriteEffect, 0f);
         }
