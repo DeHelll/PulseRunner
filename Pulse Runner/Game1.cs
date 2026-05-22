@@ -67,7 +67,7 @@ namespace Pulse_Runner
             UpdateLevelGeometry();
         }
 
-       private void UpdateLevelGeometry()
+        private void UpdateLevelGeometry()
         {
             if (_groundTexture == null || _player == null) return;
 
@@ -92,11 +92,39 @@ namespace Pulse_Runner
             List<int> previousTierX = new List<int>() { w / 2 }; 
             int currentY = (int)groundY;
 
+            // СЧЕТЧИКИ ИСТОРИИ ГЕНЕРАЦИИ
+            int consecutiveSingles = 0;
+            int consecutiveDoubles = 0;
+
             for (int i = 1; i <= 30; i++)
             {
                 currentY -= rng.Next(minGapY, maxGapY);
 
-                int platformsCount = (rng.Next(1, 101) <= 60) ? 1 : 2; 
+                int platformsCount;
+
+                if (consecutiveSingles >= 2) 
+                {
+                    platformsCount = 2; 
+                }
+                else if (consecutiveDoubles >= 2) 
+                {
+                    platformsCount = 1; 
+                }
+                else 
+                {
+                    platformsCount = (rng.Next(1, 101) <= 60) ? 1 : 2; 
+                }
+
+                if (platformsCount == 1)
+                {
+                    consecutiveSingles++;
+                    consecutiveDoubles = 0; 
+                }
+                else
+                {
+                    consecutiveDoubles++;
+                    consecutiveSingles = 0; 
+                }
 
                 List<int> currentTierX = new List<int>();
 
