@@ -1,6 +1,8 @@
 ﻿using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
+using Microsoft.Xna.Framework.Audio;
+using Microsoft.Xna.Framework.Media;
 using System;
 using System.Collections.Generic;
 
@@ -14,8 +16,14 @@ namespace Pulse_Runner
         private Player _player;
         private Texture2D _bgTexture, _groundTexture;
         private List<Platform> _platforms;
+        private SpriteFont _font; 
+
+        private SoundEffect _jumpSound;
+        private SoundEffect _victorySound; // Добавлено поле для звука победы
+        private Song _bgMusic; 
 
         private Matrix _cameraTransform;
+        private float _finishY; 
 
         private const float ReferenceHeight = 1080f;
         private const float BasePlayerScale = 0.25f;
@@ -55,13 +63,30 @@ namespace Pulse_Runner
             _bgTexture = Content.Load<Texture2D>("background");
             _groundTexture = Content.Load<Texture2D>("ground");
 
+            try { _font = Content.Load<SpriteFont>("font"); } catch { }
+
+            try
+            {
+                _bgMusic = Content.Load<Song>("bgm");
+                MediaPlayer.IsRepeating = true;
+                MediaPlayer.Volume = 0.05f; 
+                MediaPlayer.Play(_bgMusic);
+            }
+            catch { Console.WriteLine("File bgm.mp3 is not found."); }
+
+            try { _jumpSound = Content.Load<SoundEffect>("jump_sfx"); } catch { }
+            
+            // Безопасная загрузка звука победы
+            try { _victorySound = Content.Load<SoundEffect>("victory_sfx"); } catch { Console.WriteLine("Файл victory_sfx.wav не найден."); }
+
             List<Texture2D> runFrames = new List<Texture2D> { Content.Load<Texture2D>("R1"), Content.Load<Texture2D>("R2"), Content.Load<Texture2D>("R3"), Content.Load<Texture2D>("R4"), Content.Load<Texture2D>("R5") };
             List<Texture2D> attackFrames = new List<Texture2D> { Content.Load<Texture2D>("A1"), Content.Load<Texture2D>("A2"), Content.Load<Texture2D>("A3"), Content.Load<Texture2D>("A4"), Content.Load<Texture2D>("A5"), Content.Load<Texture2D>("A6"), Content.Load<Texture2D>("A7"), Content.Load<Texture2D>("A8") };
             Texture2D idleFrame = attackFrames[7];
             Texture2D jumpFrame = Content.Load<Texture2D>("jump");
             Texture2D fallFrame = Content.Load<Texture2D>("fall");
 
-            _player = new Player(idleFrame, runFrames, attackFrames, jumpFrame, fallFrame, null, new Vector2(100, 100), 400f, BasePlayerScale);
+            // Передаем как звук прыжка, так и звук победы в конструктор игрока
+            _player = new Player(idleFrame, runFrames, attackFrames, jumpFrame, fallFrame, _jumpSound, _victorySound, new Vector2(100, 100), 400f, BasePlayerScale);
 
             _platforms = new List<Platform>();
             UpdateLevelGeometry();
@@ -92,39 +117,20 @@ namespace Pulse_Runner
             List<int> previousTierX = new List<int>() { w / 2 }; 
             int currentY = (int)groundY;
 
-            // СЧЕТЧИКИ ИСТОРИИ ГЕНЕРАЦИИ
             int consecutiveSingles = 0;
             int consecutiveDoubles = 0;
 
-            for (int i = 1; i <= 30; i++)
+            for (int i = 1; i <= 100; i++)
             {
                 currentY -= rng.Next(minGapY, maxGapY);
 
                 int platformsCount;
+                if (consecutiveSingles >= 2) platformsCount = 2; 
+                else if (consecutiveDoubles >= 2) platformsCount = 1; 
+                else platformsCount = (rng.Next(1, 101) <= 60) ? 1 : 2; 
 
-                if (consecutiveSingles >= 2) 
-                {
-                    platformsCount = 2; 
-                }
-                else if (consecutiveDoubles >= 2) 
-                {
-                    platformsCount = 1; 
-                }
-                else 
-                {
-                    platformsCount = (rng.Next(1, 101) <= 60) ? 1 : 2; 
-                }
-
-                if (platformsCount == 1)
-                {
-                    consecutiveSingles++;
-                    consecutiveDoubles = 0; 
-                }
-                else
-                {
-                    consecutiveDoubles++;
-                    consecutiveSingles = 0; 
-                }
+                if (platformsCount == 1) { consecutiveSingles++; consecutiveDoubles = 0; }
+                else { consecutiveDoubles++; consecutiveSingles = 0; }
 
                 List<int> currentTierX = new List<int>();
 
@@ -149,14 +155,10 @@ namespace Pulse_Runner
                             int centerPrev = prevX + platformWidth / 2;
                             int centerCurrent = px + platformWidth / 2;
                             if (Math.Abs(centerCurrent - centerPrev) <= maxHorizontalReach)
-                            {
                                 isReachable = true;
-                            }
 
                             if (dist < platformWidth + 20)
-                            {
                                 isBlocking = true;
-                            }
                         }
 
                         bool isOverlapping = false;
@@ -170,18 +172,14 @@ namespace Pulse_Runner
                         }
 
                         if (isReachable && !isBlocking && !isOverlapping) 
-                        {
                             validPosition = true;
-                        }
                     }
 
                     if (!validPosition && previousTierX.Count > 0)
                     {
                         px = previousTierX[0] + platformWidth + 20;
                         if (px > w - platformWidth - 10) 
-                        {
                             px = previousTierX[0] - platformWidth - 20;
-                        }
                         px = Math.Clamp(px, 10, w - platformWidth - 10);
                     }
 
@@ -191,6 +189,16 @@ namespace Pulse_Runner
 
                 previousTierX = currentTierX;
             }
+
+            float minPlatformY = float.MaxValue;
+            foreach (var p in _platforms)
+            {
+                if (p.Bounds.Y < minPlatformY)
+                {
+                    minPlatformY = p.Bounds.Y;
+                }
+            }
+            _finishY = minPlatformY;
 
             _player.Position = new Vector2(w / 2 - _player.HitboxWidth / 2, groundY - _player.HitboxHeight);
             _player.VelocityY = 0f;
@@ -232,6 +240,19 @@ namespace Pulse_Runner
             
             _spriteBatch.Draw(_bgTexture, new Vector2(bgPosX, bgPosY), null, Color.White, 0f, Vector2.Zero, bgScale, SpriteEffects.None, 0f);
             
+            if (_font != null)
+            {
+                int distanceToFinish = (int)Math.Max(0, (_player.Position.Y + _player.HitboxHeight) - _finishY);
+                _spriteBatch.DrawString(_font, $"Distance to Finish: {distanceToFinish}m", new Vector2(20, 20), Color.White);
+
+                if (_player.IsWon)
+                {
+                    string winText = "VICTORY!";
+                    Vector2 size = _font.MeasureString(winText);
+                    _spriteBatch.DrawString(_font, winText, new Vector2((_graphics.PreferredBackBufferWidth - size.X) / 2, _graphics.PreferredBackBufferHeight / 2), Color.Gold);
+                }
+            }
+
             _spriteBatch.End();
 
             _spriteBatch.Begin(
@@ -240,7 +261,6 @@ namespace Pulse_Runner
             );
             
             foreach (var p in _platforms) p.Draw(_spriteBatch);
-                
             _player.Draw(_spriteBatch);
             
             _spriteBatch.End();

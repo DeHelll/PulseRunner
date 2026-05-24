@@ -13,7 +13,9 @@ namespace Pulse_Runner
     {
         private Texture2D _idleFrame, _jumpFrame, _fallFrame, _currentTexture;
         private List<Texture2D> _runFrames, _attackFrames;
+        
         private SoundEffect _jumpSound;
+        private SoundEffect _victorySound; // Добавлено поле для звука победы
 
         public Vector2 Position;
         public float Speed { get; set; }
@@ -27,22 +29,42 @@ namespace Pulse_Runner
         public float VelocityY = 0f;
         public bool IsOnGround = false;
 
+        public bool IsWon = false;
+
         private PlayerState _currentState = PlayerState.Idle;
         private int _currentRunFrameIndex = 0, _currentAttackFrameIndex = 0;
         private float _animationTimer = 0f;
         private SpriteEffects _spriteEffect = SpriteEffects.None;
         private MouseState _previousMouseState;
 
-        public Player(Texture2D idleFrame, List<Texture2D> runFrames, List<Texture2D> attackFrames, Texture2D jumpFrame, Texture2D fallFrame, SoundEffect jumpSound, Vector2 position, float speed, float scale)
+        // Конструктор теперь принимает 10 аргументов (включая victorySound)
+        public Player(Texture2D idleFrame, List<Texture2D> runFrames, List<Texture2D> attackFrames, Texture2D jumpFrame, Texture2D fallFrame, SoundEffect jumpSound, SoundEffect victorySound, Vector2 position, float speed, float scale)
         {
-            _idleFrame = idleFrame; _runFrames = runFrames; _attackFrames = attackFrames;
-            _jumpFrame = jumpFrame; _fallFrame = fallFrame; _jumpSound = jumpSound;
-            Position = position; Speed = speed; Scale = scale;
-            _currentTexture = _idleFrame; _previousMouseState = Mouse.GetState();
+            _idleFrame = idleFrame; 
+            _runFrames = runFrames; 
+            _attackFrames = attackFrames;
+            _jumpFrame = jumpFrame; 
+            _fallFrame = fallFrame; 
+            _jumpSound = jumpSound; 
+            _victorySound = victorySound; 
+            Position = position; 
+            Speed = speed; 
+            Scale = scale;
+            _currentTexture = _idleFrame; 
+            _previousMouseState = Mouse.GetState();
         }
 
         public void Update(GameTime gameTime, List<Platform> platforms, int screenWidth, int screenHeight)
         {
+            if (IsWon)
+            {
+                VelocityY = 0f;
+                IsOnGround = true;
+                _currentState = PlayerState.Idle;
+                _currentTexture = _idleFrame;
+                return;
+            }
+
             var kstate = Keyboard.GetState();
             var mstate = Mouse.GetState();
             float time = (float)gameTime.ElapsedGameTime.TotalSeconds;
@@ -101,7 +123,8 @@ namespace Pulse_Runner
             {
                 VelocityY = -1100f; 
                 IsOnGround = false;
-                if (_jumpSound != null) _jumpSound.Play();
+                
+                try { _jumpSound?.Play(0.15f, 0.0f, 0.0f); } catch { } 
             }
 
             ApplyPhysics(time, platforms);
@@ -135,6 +158,26 @@ namespace Pulse_Runner
                     {
                         Position.Y = p.Bounds.Top - HitboxHeight; 
                         VelocityY = 0f;
+                        
+                        if (!IsOnGround)
+                        {
+                            bool isHighest = true;
+                            foreach (var plat in platforms)
+                            {
+                                if (plat.Bounds.Y < p.Bounds.Y)
+                                {
+                                    isHighest = false;
+                                    break;
+                                }
+                            }
+                            if (isHighest) 
+                            {
+                                IsWon = true;
+                                // Воспроизводим победный звук один раз при касании (громкость 40%)
+                                try { _victorySound?.Play(0.4f, 0.0f, 0.0f); } catch { }
+                            }
+                        }
+
                         IsOnGround = true;
                     }
                     else if (VelocityY < 0)
@@ -176,10 +219,21 @@ namespace Pulse_Runner
                 index++;
                 if (index >= frames.Count)
                 {
-                    if (stopAtEnd) { _currentState = PlayerState.Idle; _currentTexture = _idleFrame; index = 0; }
-                    else index = 0;
+                    if (stopAtEnd) 
+                    { 
+                        _currentState = PlayerState.Idle; 
+                        _currentTexture = _idleFrame; 
+                        index = 0; 
+                    }
+                    else 
+                    {
+                        index = 0;
+                    }
                 }
-                if (_currentState != PlayerState.Idle) _currentTexture = frames[index];
+                if (_currentState != PlayerState.Idle) 
+                {
+                    _currentTexture = frames[index];
+                }
             }
         }
 
