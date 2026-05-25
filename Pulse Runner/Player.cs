@@ -13,17 +13,17 @@ namespace Pulse_Runner
     {
         private Texture2D _idleFrame, _jumpFrame, _fallFrame, _currentTexture;
         private List<Texture2D> _runFrames, _attackFrames;
-        
+
         private SoundEffect _jumpSound;
-        private SoundEffect _victorySound; // Добавлено поле для звука победы
+        private SoundEffect _victorySound;
 
         public Vector2 Position;
         public float Speed { get; set; }
         public float Scale { get; set; }
-        
-        public int HitboxWidth => (int)(_idleFrame.Width * Scale * 0.45f); 
-        public int HitboxHeight => (int)(_idleFrame.Height * Scale * 0.95f); 
-        
+
+        public int HitboxWidth => (int)(_idleFrame.Width * Scale * 0.45f);
+        public int HitboxHeight => (int)(_idleFrame.Height * Scale * 0.95f);
+
         public Rectangle Bounds => new Rectangle((int)Math.Round(Position.X), (int)Math.Round(Position.Y), HitboxWidth, HitboxHeight);
 
         public float VelocityY = 0f;
@@ -37,21 +37,25 @@ namespace Pulse_Runner
         private SpriteEffects _spriteEffect = SpriteEffects.None;
         private MouseState _previousMouseState;
 
-        // Конструктор теперь принимает 10 аргументов (включая victorySound)
         public Player(Texture2D idleFrame, List<Texture2D> runFrames, List<Texture2D> attackFrames, Texture2D jumpFrame, Texture2D fallFrame, SoundEffect jumpSound, SoundEffect victorySound, Vector2 position, float speed, float scale)
         {
-            _idleFrame = idleFrame; 
-            _runFrames = runFrames; 
+            _idleFrame = idleFrame;
+            _runFrames = runFrames;
             _attackFrames = attackFrames;
-            _jumpFrame = jumpFrame; 
-            _fallFrame = fallFrame; 
-            _jumpSound = jumpSound; 
-            _victorySound = victorySound; 
-            Position = position; 
-            Speed = speed; 
+            _jumpFrame = jumpFrame;
+            _fallFrame = fallFrame;
+            _jumpSound = jumpSound;
+            _victorySound = victorySound;
+            Position = position;
+            Speed = speed;
             Scale = scale;
-            _currentTexture = _idleFrame; 
+            _currentTexture = _idleFrame;
             _previousMouseState = Mouse.GetState();
+        }
+
+        public Rectangle GetBounds()
+        {
+            return new Rectangle((int)Position.X, (int)Position.Y, HitboxWidth, HitboxHeight);
         }
 
         public void Update(GameTime gameTime, List<Platform> platforms, int screenWidth, int screenHeight)
@@ -73,16 +77,16 @@ namespace Pulse_Runner
             {
                 UpdateAnimation(time, _attackFrames, ref _currentAttackFrameIndex, 0.08f, true);
                 ApplyPhysics(time, platforms);
-                _previousMouseState = mstate; 
+                _previousMouseState = mstate;
                 return;
             }
 
             if (mstate.LeftButton == ButtonState.Pressed && _previousMouseState.LeftButton == ButtonState.Released)
             {
-                _currentState = PlayerState.Attacking; 
+                _currentState = PlayerState.Attacking;
                 _currentAttackFrameIndex = 0;
-                _currentTexture = _attackFrames[0]; 
-                _previousMouseState = mstate; 
+                _currentTexture = _attackFrames[0];
+                _previousMouseState = mstate;
                 return;
             }
 
@@ -92,11 +96,11 @@ namespace Pulse_Runner
 
             Position.X += dx;
             Position.X = MathHelper.Clamp(Position.X, 0, screenWidth - HitboxWidth);
-            
+
             int pxX = (int)Math.Round(Position.X);
             int pxY = (int)Math.Round(Position.Y) + 4;
             Rectangle px = new Rectangle(pxX, pxY, HitboxWidth, HitboxHeight - 8);
-            
+
             foreach (var p in platforms)
             {
                 if (px.Intersects(p.Bounds))
@@ -121,10 +125,10 @@ namespace Pulse_Runner
 
             if ((kstate.IsKeyDown(Keys.Up) || kstate.IsKeyDown(Keys.W) || kstate.IsKeyDown(Keys.Space)) && IsOnGround)
             {
-                VelocityY = -1100f; 
+                VelocityY = -1100f;
                 IsOnGround = false;
-                
-                try { _jumpSound?.Play(0.15f, 0.0f, 0.0f); } catch { } 
+
+                try { _jumpSound?.Play(0.15f, 0.0f, 0.0f); } catch { }
             }
 
             ApplyPhysics(time, platforms);
@@ -136,12 +140,12 @@ namespace Pulse_Runner
         {
             if (!IsOnGround)
             {
-                VelocityY += 2200f * time; 
+                VelocityY += 2200f * time;
                 if (VelocityY > 1200f) VelocityY = 1200f;
             }
             else
             {
-                VelocityY = 0f; 
+                VelocityY = 0f;
             }
 
             Position.Y += VelocityY * time;
@@ -156,9 +160,9 @@ namespace Pulse_Runner
                 {
                     if (VelocityY > 0)
                     {
-                        Position.Y = p.Bounds.Top - HitboxHeight; 
+                        Position.Y = p.Bounds.Top - HitboxHeight;
                         VelocityY = 0f;
-                        
+
                         if (!IsOnGround)
                         {
                             bool isHighest = true;
@@ -170,10 +174,9 @@ namespace Pulse_Runner
                                     break;
                                 }
                             }
-                            if (isHighest) 
+                            if (isHighest)
                             {
                                 IsWon = true;
-                                // Воспроизводим победный звук один раз при касании (громкость 40%)
                                 try { _victorySound?.Play(0.4f, 0.0f, 0.0f); } catch { }
                             }
                         }
@@ -193,20 +196,20 @@ namespace Pulse_Runner
 
         private void UpdateStateAndAnimation(bool moving, float time)
         {
-            if (!IsOnGround) 
-            { 
-                _currentState = VelocityY < 0 ? PlayerState.Jumping : PlayerState.Falling; 
-                _currentTexture = VelocityY < 0 ? _jumpFrame : _fallFrame; 
+            if (!IsOnGround)
+            {
+                _currentState = VelocityY < 0 ? PlayerState.Jumping : PlayerState.Falling;
+                _currentTexture = VelocityY < 0 ? _jumpFrame : _fallFrame;
             }
-            else if (moving) 
-            { 
-                _currentState = PlayerState.Running; 
-                UpdateAnimation(time, _runFrames, ref _currentRunFrameIndex, 0.08f, false); 
+            else if (moving)
+            {
+                _currentState = PlayerState.Running;
+                UpdateAnimation(time, _runFrames, ref _currentRunFrameIndex, 0.08f, false);
             }
-            else 
-            { 
-                _currentState = PlayerState.Idle; 
-                _currentTexture = _idleFrame; 
+            else
+            {
+                _currentState = PlayerState.Idle;
+                _currentTexture = _idleFrame;
             }
         }
 
@@ -215,22 +218,22 @@ namespace Pulse_Runner
             _animationTimer += time;
             if (_animationTimer >= speed)
             {
-                _animationTimer = 0f; 
+                _animationTimer = 0f;
                 index++;
                 if (index >= frames.Count)
                 {
-                    if (stopAtEnd) 
-                    { 
-                        _currentState = PlayerState.Idle; 
-                        _currentTexture = _idleFrame; 
-                        index = 0; 
+                    if (stopAtEnd)
+                    {
+                        _currentState = PlayerState.Idle;
+                        _currentTexture = _idleFrame;
+                        index = 0;
                     }
-                    else 
+                    else
                     {
                         index = 0;
                     }
                 }
-                if (_currentState != PlayerState.Idle) 
+                if (_currentState != PlayerState.Idle)
                 {
                     _currentTexture = frames[index];
                 }
@@ -241,7 +244,7 @@ namespace Pulse_Runner
         {
             float targetVisualHeight = _idleFrame.Height * Scale;
             float dynScale = targetVisualHeight / _currentTexture.Height;
-            if (_currentState == PlayerState.Running || _currentState == PlayerState.Jumping || _currentState == PlayerState.Falling) 
+            if (_currentState == PlayerState.Running || _currentState == PlayerState.Jumping || _currentState == PlayerState.Falling)
             {
                 dynScale *= 1.2f;
             }
@@ -250,9 +253,9 @@ namespace Pulse_Runner
             float visualHeight = _currentTexture.Height * dynScale;
 
             float wOff = (HitboxWidth - visualWidth) / 2f;
-            float hOff = HitboxHeight - visualHeight; 
+            float hOff = HitboxHeight - visualHeight;
 
-            float feetOffset = 11f; 
+            float feetOffset = 10f;
 
             Vector2 drawPos = new Vector2((float)Math.Round(Position.X + wOff), (float)Math.Round(Position.Y + hOff + feetOffset));
             spriteBatch.Draw(_currentTexture, drawPos, null, Color.White, 0f, Vector2.Zero, dynScale, _spriteEffect, 0f);
